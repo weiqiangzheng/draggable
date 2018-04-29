@@ -1,6 +1,6 @@
 import {closest} from 'shared/utils';
 
-import {Announcement, Focusable, Mirror, Scrollable} from './Plugins';
+import {Announcement, Focusable, Mirror, Scrollable, Styleable} from './Plugins';
 
 import Emitter from './Emitter';
 import {MouseSensor, TouchSensor} from './Sensors';
@@ -57,7 +57,6 @@ export const defaultOptions = {
   draggable: '.draggable-source',
   handle: null,
   delay: 100,
-  placedTimeout: 800,
   plugins: [],
   sensors: [],
 };
@@ -76,9 +75,10 @@ export default class Draggable {
    * @property {Focusable} Plugins.Focusable
    * @property {Mirror} Plugins.Mirror
    * @property {Scrollable} Plugins.Scrollable
+   * @property {Styleable} Plugins.Styleable
    * @type {Object}
    */
-  static Plugins = {Announcement, Focusable, Mirror, Scrollable};
+  static Plugins = {Announcement, Focusable, Mirror, Scrollable, Styleable};
 
   /**
    * Draggable constructor.
@@ -188,7 +188,7 @@ export default class Draggable {
    * Adds plugin to this draggable instance. This will end up calling the attach method of the plugin
    * @param {...typeof Plugin} plugins - Plugins that you want attached to draggable
    * @return {Draggable}
-   * @example draggable.addPlugin(CustomA11yPlugin, CustomMirrorPlugin)
+   * @example draggable.addPlugin(CustomA11yPlugin, CustomMirrorPlugin);
    */
   addPlugin(...plugins) {
     const activePlugins = plugins.map((Plugin) => new Plugin(this));
@@ -204,7 +204,7 @@ export default class Draggable {
    * the detach method of the plugin
    * @param {...typeof Plugin} plugins - Plugins that you want detached from draggable
    * @return {Draggable}
-   * @example draggable.removePlugin(MirrorPlugin, CustomMirrorPlugin)
+   * @example draggable.removePlugin(MirrorPlugin, CustomMirrorPlugin);
    */
   removePlugin(...plugins) {
     const removedPlugins = this.plugins.filter((plugin) => plugins.includes(plugin.constructor));
@@ -216,10 +216,20 @@ export default class Draggable {
   }
 
   /**
+   * Returns plugin by plugin constructor
+   * @param {typeof Plugin} pluginConstructor - Plugin constructor
+   * @return {Plugin}
+   * @example draggable.getPlugin(Styleable);
+   */
+  getPlugin(pluginConstructor) {
+    return this.plugins.find((plugin) => plugin.constructor === pluginConstructor);
+  }
+
+  /**
    * Adds sensors to this draggable instance. This will end up calling the attach method of the sensor
    * @param {...typeof Sensor} sensors - Sensors that you want attached to draggable
    * @return {Draggable}
-   * @example draggable.addSensor(ForceTouchSensor, CustomSensor)
+   * @example draggable.addSensor(ForceTouchSensor, CustomSensor);
    */
   addSensor(...sensors) {
     const activeSensors = sensors.map((Sensor) => new Sensor(this.containers, this.options));
@@ -235,7 +245,7 @@ export default class Draggable {
    * the detach method of the sensor
    * @param {...typeof Sensor} sensors - Sensors that you want attached to draggable
    * @return {Draggable}
-   * @example draggable.removeSensor(TouchSensor, DragSensor)
+   * @example draggable.removeSensor(TouchSensor, DragSensor);
    */
   removeSensor(...sensors) {
     const removedSensors = this.sensors.filter((sensor) => sensors.includes(sensor.constructor));
@@ -250,7 +260,7 @@ export default class Draggable {
    * Adds container to this draggable instance
    * @param {...HTMLElement} containers - Containers you want to add to draggable
    * @return {Draggable}
-   * @example draggable.addContainer(document.body)
+   * @example draggable.addContainer(document.body);
    */
   addContainer(...containers) {
     this.containers = [...this.containers, ...containers];
@@ -262,7 +272,7 @@ export default class Draggable {
    * Removes container from this draggable instance
    * @param {...HTMLElement} containers - Containers you want to remove from draggable
    * @return {Draggable}
-   * @example draggable.removeContainer(document.body)
+   * @example draggable.removeContainer(document.body);
    */
   removeContainer(...containers) {
     this.containers = this.containers.filter((container) => !containers.includes(container));
@@ -373,12 +383,6 @@ export default class Draggable {
       return;
     }
 
-    if (this.lastPlacedSource && this.lastPlacedContainer) {
-      clearTimeout(this.placedTimeoutID);
-      this.lastPlacedSource.classList.remove(this.getClassNameFor('source:placed'));
-      this.lastPlacedContainer.classList.remove(this.getClassNameFor('container:placed'));
-    }
-
     this.dragging = true;
 
     this.source = this.originalSource.cloneNode(true);
@@ -417,13 +421,9 @@ export default class Draggable {
       this.trigger(mirrorAttachedEvent);
     }
 
-    this.originalSource.classList.add(this.getClassNameFor('source:original'));
     this.originalSource.parentNode.insertBefore(this.source, this.originalSource);
 
     this.originalSource.style.display = 'none';
-    this.source.classList.add(this.getClassNameFor('source:dragging'));
-    this.sourceContainer.classList.add(this.getClassNameFor('container:dragging'));
-    document.body.classList.add(this.getClassNameFor('body:dragging'));
     applyUserSelect(document.body, 'none');
 
     const dragEvent = new DragStartEvent({
@@ -445,10 +445,6 @@ export default class Draggable {
 
       this.source.parentNode.removeChild(this.source);
       this.originalSource.style.display = null;
-
-      this.source.classList.remove(this.getClassNameFor('source:dragging'));
-      this.sourceContainer.classList.remove(this.getClassNameFor('container:dragging'));
-      document.body.classList.remove(this.getClassNameFor('body:dragging'));
     } else {
       requestAnimationFrame(() => {
         // Temporary hack until we can correctly re-write the originalSource -> source
@@ -522,7 +518,6 @@ export default class Draggable {
         over: this.currentOver,
       });
 
-      this.currentOver.classList.remove(this.getClassNameFor('draggable:over'));
       this.currentOver = null;
 
       this.trigger(dragOutEvent);
@@ -538,15 +533,12 @@ export default class Draggable {
         overContainer: this.currentOverContainer,
       });
 
-      this.currentOverContainer.classList.remove(this.getClassNameFor('container:over'));
       this.currentOverContainer = null;
 
       this.trigger(dragOutContainerEvent);
     }
 
     if (isOverContainer) {
-      overContainer.classList.add(this.getClassNameFor('container:over'));
-
       const dragOverContainerEvent = new DragOverContainerEvent({
         source: this.source,
         mirror: this.mirror,
@@ -562,8 +554,6 @@ export default class Draggable {
     }
 
     if (isOverDraggable) {
-      target.classList.add(this.getClassNameFor('draggable:over'));
-
       const dragOverEvent = new DragOverEvent({
         source: this.source,
         mirror: this.mirror,
@@ -607,21 +597,7 @@ export default class Draggable {
     this.source.parentNode.removeChild(this.source);
     this.originalSource.style.display = '';
 
-    this.source.classList.remove(this.getClassNameFor('source:dragging'));
-    this.originalSource.classList.remove(this.getClassNameFor('source:original'));
-    this.originalSource.classList.add(this.getClassNameFor('source:placed'));
-    this.sourceContainer.classList.add(this.getClassNameFor('container:placed'));
-    this.sourceContainer.classList.remove(this.getClassNameFor('container:dragging'));
-    document.body.classList.remove(this.getClassNameFor('body:dragging'));
     applyUserSelect(document.body, '');
-
-    if (this.currentOver) {
-      this.currentOver.classList.remove(this.getClassNameFor('draggable:over'));
-    }
-
-    if (this.currentOverContainer) {
-      this.currentOverContainer.classList.remove(this.getClassNameFor('container:over'));
-    }
 
     if (this.mirror) {
       const mirrorDestroyEvent = new MirrorDestroyEvent({
@@ -637,22 +613,6 @@ export default class Draggable {
         this.mirror.parentNode.removeChild(this.mirror);
       }
     }
-
-    this.lastPlacedSource = this.originalSource;
-    this.lastPlacedContainer = this.sourceContainer;
-
-    this.placedTimeoutID = setTimeout(() => {
-      if (this.lastPlacedSource) {
-        this.lastPlacedSource.classList.remove(this.getClassNameFor('source:placed'));
-      }
-
-      if (this.lastPlacedContainer) {
-        this.lastPlacedContainer.classList.remove(this.getClassNameFor('container:placed'));
-      }
-
-      this.lastPlacedSource = null;
-      this.lastPlacedContainer = null;
-    }, this.options.placedTimeout);
 
     this.source = null;
     this.mirror = null;
