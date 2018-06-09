@@ -5,6 +5,8 @@ const onDragStart = Symbol('onDragStart');
 const onDragStop = Symbol('onDragStop');
 const onDragOver = Symbol('onDragOver');
 const onDragOut = Symbol('onDragOut');
+const onMirrorCreated = Symbol('onMirrorCreated');
+const onMirrorDestroy = Symbol('onMirrorDestroy');
 
 /**
  * Snappable plugin which snaps draggable elements into place
@@ -32,6 +34,8 @@ export default class Snappable extends AbstractPlugin {
     this[onDragStop] = this[onDragStop].bind(this);
     this[onDragOver] = this[onDragOver].bind(this);
     this[onDragOut] = this[onDragOut].bind(this);
+    this[onMirrorCreated] = this[onMirrorCreated].bind(this);
+    this[onMirrorDestroy] = this[onMirrorDestroy].bind(this);
   }
 
   /**
@@ -44,7 +48,9 @@ export default class Snappable extends AbstractPlugin {
       .on('drag:over', this[onDragOver])
       .on('drag:out', this[onDragOut])
       .on('droppable:over', this[onDragOver])
-      .on('droppable:out', this[onDragOut]);
+      .on('droppable:out', this[onDragOut])
+      .on('mirror:created', this[onMirrorCreated])
+      .on('mirror:destroy', this[onMirrorDestroy]);
   }
 
   /**
@@ -57,7 +63,9 @@ export default class Snappable extends AbstractPlugin {
       .off('drag:over', this[onDragOver])
       .off('drag:out', this[onDragOut])
       .off('droppable:over', this[onDragOver])
-      .off('droppable:out', this[onDragOut]);
+      .off('droppable:out', this[onDragOut])
+      .off('mirror:created', this[onMirrorCreated])
+      .off('mirror:destroy', this[onMirrorDestroy]);
   }
 
   /**
@@ -93,7 +101,6 @@ export default class Snappable extends AbstractPlugin {
     }
 
     const source = event.source || event.dragEvent.source;
-    const mirror = event.mirror || event.dragEvent.mirror;
 
     if (source === this.firstSource) {
       this.firstSource = null;
@@ -111,8 +118,8 @@ export default class Snappable extends AbstractPlugin {
       return;
     }
 
-    if (mirror) {
-      mirror.style.display = 'none';
+    if (this.mirror) {
+      this.mirror.style.display = 'none';
     }
 
     source.classList.remove(this.draggable.getClassNameFor('source:dragging'));
@@ -134,7 +141,6 @@ export default class Snappable extends AbstractPlugin {
       return;
     }
 
-    const mirror = event.mirror || event.dragEvent.mirror;
     const source = event.source || event.dragEvent.source;
 
     const snapOutEvent = new SnapOutEvent({
@@ -148,10 +154,18 @@ export default class Snappable extends AbstractPlugin {
       return;
     }
 
-    if (mirror) {
-      mirror.style.display = '';
+    if (this.mirror) {
+      this.mirror.style.display = '';
     }
 
     source.classList.add(this.draggable.getClassNameFor('source:dragging'));
+  }
+
+  [onMirrorCreated]({mirror}) {
+    this.mirror = mirror;
+  }
+
+  [onMirrorDestroy]() {
+    this.mirror = null;
   }
 }

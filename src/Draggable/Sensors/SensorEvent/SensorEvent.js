@@ -42,10 +42,20 @@ export class SensorEvent extends AbstractEvent {
    * Returns the element that is behind cursor or touch pointer
    * @property target
    * @type {HTMLElement}
-   * @readonly
    */
   get target() {
     return this.data.target;
+  }
+
+  /**
+   * Sets target for this sensor event. This setter is currently
+   * used for re-assigning the target when swapping the original source
+   * with the newly cloned source
+   * @property target
+   * @type {HTMLElement}
+   */
+  set target(target) {
+    this.data.target = target;
   }
 
   /**

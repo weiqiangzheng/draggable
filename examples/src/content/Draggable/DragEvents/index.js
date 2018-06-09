@@ -60,7 +60,7 @@ export default function DragEvents() {
     };
   });
 
-  draggable.on('drag:move', (evt) => {
+  draggable.on('mirror:move', (evt) => {
     // Required to help restrict the draggable element to the container
     evt.cancel();
 

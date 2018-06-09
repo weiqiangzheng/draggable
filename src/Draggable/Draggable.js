@@ -17,19 +17,10 @@ import {
   DragPressureEvent,
 } from './DragEvent';
 
-import {
-  MirrorCreateEvent,
-  MirrorCreatedEvent,
-  MirrorAttachedEvent,
-  MirrorMoveEvent,
-  MirrorDestroyEvent,
-} from './MirrorEvent';
-
 const onDragStart = Symbol('onDragStart');
 const onDragMove = Symbol('onDragMove');
 const onDragStop = Symbol('onDragStop');
 const onDragPressure = Symbol('onDragPressure');
-const getAppendableContainer = Symbol('getAppendableContainer');
 
 /**
  * @const {Object} defaultAnnouncements
@@ -160,6 +151,9 @@ export default class Draggable {
     const draggableInitializedEvent = new DraggableInitializedEvent({
       draggable: this,
     });
+
+    this.on('mirror:created', ({mirror}) => (this.mirror = mirror));
+    this.on('mirror:destroy', () => (this.mirror = null));
 
     this.trigger(draggableInitializedEvent);
   }
@@ -353,7 +347,7 @@ export default class Draggable {
    */
   [onDragStart](event) {
     const sensorEvent = getSensorEvent(event);
-    const {target, container, originalEvent} = sensorEvent;
+    const {target, container} = sensorEvent;
 
     if (!this.containers.includes(container)) {
       return;
@@ -379,56 +373,12 @@ export default class Draggable {
       this.lastPlacedContainer.classList.remove(this.getClassNameFor('container:placed'));
     }
 
-    this.dragging = true;
-
     this.source = this.originalSource.cloneNode(true);
-
-    const mirrorCreateEvent = new MirrorCreateEvent({
-      source: this.source,
-      originalSource: this.originalSource,
-      sourceContainer: container,
-      sensorEvent,
-    });
-
-    this.trigger(mirrorCreateEvent);
-
-    if (!isDragEvent(originalEvent) && !mirrorCreateEvent.canceled()) {
-      const appendableContainer = this[getAppendableContainer]({source: this.originalSource});
-      this.mirror = this.source.cloneNode(true);
-
-      const mirrorCreatedEvent = new MirrorCreatedEvent({
-        source: this.source,
-        originalSource: this.originalSource,
-        mirror: this.mirror,
-        sourceContainer: container,
-        sensorEvent,
-      });
-
-      const mirrorAttachedEvent = new MirrorAttachedEvent({
-        source: this.source,
-        originalSource: this.originalSource,
-        mirror: this.mirror,
-        sourceContainer: container,
-        sensorEvent,
-      });
-
-      this.trigger(mirrorCreatedEvent);
-      appendableContainer.appendChild(this.mirror);
-      this.trigger(mirrorAttachedEvent);
-    }
-
-    this.originalSource.classList.add(this.getClassNameFor('source:original'));
     this.originalSource.parentNode.insertBefore(this.source, this.originalSource);
-
     this.originalSource.style.display = 'none';
-    this.source.classList.add(this.getClassNameFor('source:dragging'));
-    this.sourceContainer.classList.add(this.getClassNameFor('container:dragging'));
-    document.body.classList.add(this.getClassNameFor('body:dragging'));
-    applyUserSelect(document.body, 'none');
 
     const dragEvent = new DragStartEvent({
       source: this.source,
-      mirror: this.mirror,
       originalSource: this.originalSource,
       sourceContainer: container,
       sensorEvent,
@@ -436,32 +386,23 @@ export default class Draggable {
 
     this.trigger(dragEvent);
 
-    if (dragEvent.canceled()) {
-      this.dragging = false;
+    this.dragging = !dragEvent.canceled();
 
-      if (this.mirror) {
-        this.mirror.parentNode.removeChild(this.mirror);
-      }
-
-      this.source.parentNode.removeChild(this.source);
-      this.originalSource.style.display = null;
-
-      this.source.classList.remove(this.getClassNameFor('source:dragging'));
-      this.sourceContainer.classList.remove(this.getClassNameFor('container:dragging'));
-      document.body.classList.remove(this.getClassNameFor('body:dragging'));
-    } else {
-      requestAnimationFrame(() => {
-        // Temporary hack until we can correctly re-write the originalSource -> source
-        this[onDragMove]({
-          ...event,
-          target: this.source,
-          detail: {
-            ...event.detail,
-            target: this.source,
-          },
-        });
-      });
+    if (!this.dragging) {
+      return;
     }
+
+    this.originalSource.classList.add(this.getClassNameFor('source:original'));
+    this.source.classList.add(this.getClassNameFor('source:dragging'));
+    this.sourceContainer.classList.add(this.getClassNameFor('container:dragging'));
+    document.body.classList.add(this.getClassNameFor('body:dragging'));
+    applyUserSelect(document.body, 'none');
+
+    requestAnimationFrame(() => {
+      // Temporary hack until we can correctly re-write the originalSource -> source
+      event.detail.target = this.source;
+      this[onDragMove](event);
+    });
   }
 
   /**
@@ -480,7 +421,6 @@ export default class Draggable {
 
     const dragMoveEvent = new DragMoveEvent({
       source: this.source,
-      mirror: this.mirror,
       originalSource: this.originalSource,
       sourceContainer: container,
       sensorEvent,
@@ -490,18 +430,6 @@ export default class Draggable {
 
     if (dragMoveEvent.canceled()) {
       sensorEvent.cancel();
-    }
-
-    if (this.mirror && !dragMoveEvent.canceled()) {
-      const mirrorMoveEvent = new MirrorMoveEvent({
-        source: this.source,
-        mirror: this.mirror,
-        originalSource: this.originalSource,
-        sourceContainer: container,
-        sensorEvent,
-      });
-
-      this.trigger(mirrorMoveEvent);
     }
 
     target = closest(target, this.options.draggable);
@@ -515,7 +443,6 @@ export default class Draggable {
     if (isLeavingDraggable) {
       const dragOutEvent = new DragOutEvent({
         source: this.source,
-        mirror: this.mirror,
         originalSource: this.originalSource,
         sourceContainer: container,
         sensorEvent,
@@ -531,7 +458,6 @@ export default class Draggable {
     if (isLeavingContainer) {
       const dragOutContainerEvent = new DragOutContainerEvent({
         source: this.source,
-        mirror: this.mirror,
         originalSource: this.originalSource,
         sourceContainer: container,
         sensorEvent,
@@ -549,7 +475,6 @@ export default class Draggable {
 
       const dragOverContainerEvent = new DragOverContainerEvent({
         source: this.source,
-        mirror: this.mirror,
         originalSource: this.originalSource,
         sourceContainer: container,
         sensorEvent,
@@ -566,7 +491,6 @@ export default class Draggable {
 
       const dragOverEvent = new DragOverEvent({
         source: this.source,
-        mirror: this.mirror,
         originalSource: this.originalSource,
         sourceContainer: container,
         sensorEvent,
@@ -592,10 +516,8 @@ export default class Draggable {
 
     this.dragging = false;
 
-    const sensorEvent = getSensorEvent(event);
     const dragStopEvent = new DragStopEvent({
       source: this.source,
-      mirror: this.mirror,
       originalSource: this.originalSource,
       sensorEvent: event.sensorEvent,
       sourceContainer: this.sourceContainer,
@@ -623,21 +545,6 @@ export default class Draggable {
       this.currentOverContainer.classList.remove(this.getClassNameFor('container:over'));
     }
 
-    if (this.mirror) {
-      const mirrorDestroyEvent = new MirrorDestroyEvent({
-        source: this.source,
-        mirror: this.mirror,
-        sourceContainer: sensorEvent.container,
-        sensorEvent,
-      });
-
-      this.trigger(mirrorDestroyEvent);
-
-      if (!mirrorDestroyEvent.canceled()) {
-        this.mirror.parentNode.removeChild(this.mirror);
-      }
-    }
-
     this.lastPlacedSource = this.originalSource;
     this.lastPlacedContainer = this.sourceContainer;
 
@@ -655,7 +562,6 @@ export default class Draggable {
     }, this.options.placedTimeout);
 
     this.source = null;
-    this.mirror = null;
     this.originalSource = null;
     this.currentOverContainer = null;
     this.currentOver = null;
@@ -683,35 +589,10 @@ export default class Draggable {
 
     this.trigger(dragPressureEvent);
   }
-
-  /**
-   * Returns appendable container for mirror based on the appendTo option
-   * @private
-   * @param {Object} options
-   * @param {HTMLElement} options.source - Current source
-   * @return {HTMLElement}
-   */
-  [getAppendableContainer]({source}) {
-    const appendTo = this.options.appendTo;
-
-    if (typeof appendTo === 'string') {
-      return document.querySelector(appendTo);
-    } else if (appendTo instanceof HTMLElement) {
-      return appendTo;
-    } else if (typeof appendTo === 'function') {
-      return appendTo(source);
-    } else {
-      return source.parentNode;
-    }
-  }
 }
 
 function getSensorEvent(event) {
   return event.detail;
-}
-
-function isDragEvent(event) {
-  return /^drag/.test(event.type);
 }
 
 function applyUserSelect(element, value) {
